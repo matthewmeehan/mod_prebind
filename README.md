@@ -9,5 +9,5 @@
 **DISCLAIMER: I don't _really_ know erlang**
 
 **This code is by no means ready for production.**
-At the moment it basically allows BOSH pre-bindings for any registered users that have a known password a HTTP POST request.
+At the moment it basically allows BOSH pre-bindings for any registered users that have a known password as a HTTP POST request.
 A more advace token processing solution should be available soon...
