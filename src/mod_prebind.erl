@@ -20,45 +20,88 @@
 
 -define(JABBER_DOMAIN, "example.org").
 
--export([process/2]).
+-behaviour(gen_mod).
+
+-export([
+    start/2,
+    stop/1,
+    process/2
+]).
 
 
-process([], #request{ method = 'POST',
+%%%----------------------------------------------------------------------
+%%% REQUEST HANDLERS
+%%%----------------------------------------------------------------------
+
+process([Username,Token], #request{ method = 'POST',
                       %% auth = Auth,
-                      data = Data,
+                      %% data = Data,
                       ip = IP}) ->
-  ?DEBUG("Incoming data: ~s", [Data]),
-  process_request(Data, IP);
+  ?DEBUG("Incoming Username: ~s", [Username]),
+  ?DEBUG("Incoming Token: ~s", [Token]),
+  process_request(Username, Token, IP);
 
 process(_Path, _Request) ->
     ?DEBUG("Bad Request: ~p", [_Request]),
-    {400, ?HEADER, "Bad Request."}.
+    {400, [], {xmlelement, "code", [],
+                [{xmlcdata, "400 Bad Request"}]}}.
 
-process_request(Data, IP) ->
-  case authorized(Data) of 
-    {Username, Server} ->
-      bind(Username, Server, IP);
+process_request(Username, Token, IP) ->
+  case authorized(Username, Token) of 
+    {U, S} ->
+      bind(U, S, Token, IP);
     _ ->
-      ?DEBUG("Unauthorized Request ~s", [Data])
+      ?DEBUG("Unauthorized Request", [])
   end.
-  
-authorized(Data) ->
-    case Data of 
-      {Username, Token} ->
-        case jlib:string_to_jid(Username) of
-          error ->
-              unauthorized;
-          #jid{user = U, server = S} ->
-              case ejabberd_auth:check_password(U, S, Token) of
-                  true ->
-                      {U, S};
-                  false ->
-                      unauthorized
-              end
-        end;
-      _ ->
-        unauthorized
+
+%%%----------------------------------------------------------------------
+%%% PROCESSING
+%%%----------------------------------------------------------------------
+
+authorized(Username, Token) ->
+    case jlib:string_to_jid(Username) of
+      error ->
+          unauthorized;
+      #jid{user = U, server = S} ->
+          case ejabberd_auth:check_password(U, S, Token) of
+              true ->
+                  {U, S};
+              false ->
+                  unauthorized
+          end
     end.
 
-bind(Username, Server, IP) ->
-  ?DEBUG("Starting Pre-Bind Process", []).
+
+bind(User, Server, Token, IP) ->
+  ?DEBUG("Starting Pre-Bind Process For ~s", [User]),
+  Rid = list_to_integer(randoms:get_string()),
+  Rid1 = integer_to_list(Rid + 1),
+  {xmlelement, "body", Attrs1, _} = process_request("<body rid='"++Rid1++"' xmlns='http://jabber.org/protocol/httpbind' to='"++Server++"' xml:lang='en' wait='60' hold='1' window='5' content='text/xml; charset=utf-8' ver='1.6' xmpp:version='1.0' xmlns:xmpp='urn:xmpp:xbosh'/>", IP),
+  {value, {_, Sid}} = lists:keysearch("sid", 1, Attrs1),
+  {value, {_, AuthID}} = lists:keysearch("authid", 1, Attrs1),
+  Rid2 = integer_to_list(Rid + 2),
+  Auth = base64:encode_to_string(AuthID++[0]++User++[0]++Token),
+  process_request("<body rid='"++Rid2++"' xmlns='http://jabber.org/protocol/httpbind' sid='"++Sid++"'><auth xmlns='urn:ietf:params:xml:ns:xmpp-sasl' mechanism='PLAIN'>"++Auth++"</auth></body>", IP),
+  Rid3 = integer_to_list(Rid + 3),
+  process_request("<body rid='"++Rid3++"' xmlns='http://jabber.org/protocol/httpbind' sid='"++Sid++"' to='"++Server++"' xml:lang='en' xmpp:restart='true' xmlns:xmpp='urn:xmpp:xbosh'/>", IP),
+  Rid4 = integer_to_list(Rid + 4),
+  {_,_,_,[{_,_,_,[{_,_,_,[{_,_,_,[{_,SJID}]}]}]}]} = process_request("<body rid='"++Rid4++"' xmlns='http://jabber.org/protocol/httpbind' sid='"++Sid++"'><iq type='set'><bind xmlns='urn:ietf:params:xml:ns:xmpp-bind'/></iq></body>", IP),
+  Rid5 = integer_to_list(Rid + 5),
+  process_request("<body rid='"++Rid5++"' xmlns='http://jabber.org/protocol/httpbind' sid='"++Sid++"'><iq type='set'><session xmlns='urn:ietf:params:xml:ns:xmpp-session'/></iq></body>", IP),
+  binary_to_list(SJID) ++ "\n" ++ Sid ++ "\n" ++ integer_to_list(Rid + 6).
+
+process_request(Request, IP) ->
+    {_, _, Response} = ejabberd_http_bind:process_request(Request, IP),
+    xml_stream:parse_element(lists:flatten(Response)).
+
+
+
+%%%----------------------------------------------------------------------
+%%% BEHAVIOUR CALLBACKS
+%%%----------------------------------------------------------------------
+
+start(_Host, _Opts) ->
+    ok.
+
+stop(_Host) ->
+    ok. 
