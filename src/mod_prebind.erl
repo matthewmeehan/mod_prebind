@@ -21,11 +21,12 @@
 ]).
 
 process([], #request{ method = 'POST',
-                          auth = Auth,
-                          data = Data,
-                          ip = IP}) ->
-  
+                      auth = Auth,
+                      data = Data,
+                      ip = IP}) ->
+
   ?DEBUG("Incoming data: ~s", [Data]).
 
-process(_LocalPath, _Request) ->
+process(_Path, _Request) ->
+    ?DEBUG("Bad Request: ~p", [_Request]),
     {403, [], "Forbidden"}.
