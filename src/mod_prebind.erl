@@ -12,10 +12,10 @@
 -include("ejabberd.hrl").
 
 %%% HTTP Globals
--include("/root/ejabberd/src/web/http_bind.hrl").
+-include("http_bind.hrl").
 
 %%% HTTP Record
--include("web/ejabberd_http.hrl").
+-include("ejabberd_http.hrl").
 
 
 -define(JABBER_DOMAIN, "example.org").
@@ -105,3 +105,4 @@ start(_Host, _Opts) ->
 
 stop(_Host) ->
     ok. 
+
