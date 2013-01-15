@@ -92,7 +92,7 @@ bind(User, Server, Token, IP) ->
 
 process_request(Request, IP) ->
     {_, _, Response} = ejabberd_http_bind:process_request(Request, IP),
-    xml_stream:parse_element(lists:flatten(Response)).
+    xml_stream:parse_element(Response).
 
 
 
